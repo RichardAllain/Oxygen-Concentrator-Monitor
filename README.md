@@ -11,7 +11,7 @@ A smart monitoring system for oxygen concentrator performance using ESP32, OLED 
 - ESP32 microcontroller
 
 ## Setup Instructions
-See full setup instructions in `User Manual` section below or inside firmware comments.
+See full setup instructions in [User Manual](User_Manual) section.
 
 ## Firmware
 Firmware written in Arduino C++, compatible with ESP32 Dev Module.
