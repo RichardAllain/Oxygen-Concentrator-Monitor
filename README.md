@@ -1,4 +1,4 @@
-# Oxygen Concentrator Monitor
+# Oxygen Concentrator Monitoring System
 
 A smart monitoring system for oxygen concentrator performance using ESP32, OLED display, and OCS-3F sensor. The system displays oxygen concentration, flow rate, and therapy duration in real time, with optional online logging via Wi-Fi.
 
