@@ -1,0 +1,48 @@
+Oxygen Concentrator Monitor – User Manual
+
+Uploading the Firmware
+1. Download and install the Arduino IDE from the official website:
+👉 https://www.arduino.cc/en/software
+2. Add the following URL to Additional Board Manager URLs:
+👉 https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+3. Go to Tools > Board > Boards Manager, search for “ESP32 by Espressif Systems”, and install it.
+4. Use the Library Manager to install the following:
+    - Adafruit_SSD1306 – for OLED display
+    - Adafruit_GFX – required dependency for SSD1306
+    - UART communication library (if required by OCS-3F sensor)
+5. Open the firmware file Oxygen_Concentrator_Monitor.ino using the Arduino IDE.
+6. Personalize your Wi-Fi hotspot name and password, Google Spreadsheet script, and ThingSpeak URL and API key in Oxygen_Concentrator_Monitor.ino file.
+7. Use a micro-USB or USB Type-C cable to connect the ESP32 (or battery shield) to your computer.
+8. Select Board and Port
+    - Board: ESP32 Dev Module
+    - Port: select the correct COM port from Tools > Port
+9. Click the Upload button (right arrow icon) in Arduino IDE and wait for the firmware to compile and upload.
+
+Operation Instructions
+1. Power On the device
+    - Insert two 18650 lithium-ion batteries (3.7V) into the battery shield
+    - Ensure the shield supplies 5V and 3.3V to components: ESP32, OLED, and proximity sensor.
+2. Connect to the Oxygen Concentrator
+    - Place the OCS-3F sensor between the oxygen concentrator output hose and the nasal cannula.
+    - Ensure the flow direction is correct (though OCS-3F supports bidirectional flow).
+3. Begin Monitoring
+   Once powered on, the OLED screen displays:
+    - Oxygen concentration (%)
+    - Flow rate (LPM)
+    - Therapy duration (if nasal cannula is worn and oxygen concentration output > 90%)
+4. Usage Detection
+   The proximity sensor detects whether the nasal cannula is in use:
+    - 1 green LED: Cannula not in use
+    - 2 green LEDs: Cannula in use, therapy time automatically recorded
+5. Online Data Monitoring (Optional)
+    - Activate Wi-Fi hotspot on your phone or device.
+    - The ESP32 will connect and send data to Google Sheets or ThingSpeak.
+    - Ensure a stable Wi-Fi connection for this feature.
+
+Environmental Conditions
+1. Temperature: 0 – 50°C
+2. Relative Humidity: 5 – 85% RH
+
+Battery Charging
+Charge via Type-C or micro-USB port on the battery shield.
+The shield includes automatic protection from overcharging and overdischarging.
