@@ -26,14 +26,12 @@ const char* thingspeakAPIKey = "E14N6NIPEFLQZ0R4";
 unsigned char o2[12];
 unsigned int o2c = 0, o2f = 0;
 double oxydouble = 0.0, flowdouble = 0.0;
-bool objectDetected = false;
-bool isTimerRunning = false;
+bool objectDetected = false, isTimerRunning = false;
 unsigned long startTime = 0, usageTime = 0;
 
 // Queue
 QueueHandle_t dataQueue;
 
-// Struct untuk data kiriman
 struct SensorData {
   double o2;
   double flow;
@@ -45,13 +43,6 @@ void setup() {
   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
   pinMode(PROXIMITY_PIN, INPUT);
 
-  WiFi.begin(ssid, pass);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nWiFi connected");
-
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println(F("SSD1306 allocation failed"));
     while (1);
@@ -62,21 +53,27 @@ void setup() {
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 10);
   display.println("Initializing...");
+  display.setCursor(0, 20);
+  display.println("Connecting WiFi...");
   display.display();
-  delay(1000);
 
-  // Buat queue untuk komunikasi antar task
+  WiFi.begin(ssid, pass);
+  unsigned long wifiStart = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 5000) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  bool wifiConnected = WiFi.status() == WL_CONNECTED;
+  Serial.println(wifiConnected ? "\nWiFi connected" : "\nWiFi not connected");
+  display.setCursor(0, 30);
+  display.println(wifiConnected ? "WiFi Connected" : "WiFi Offline Mode");
+  display.display();
+
   dataQueue = xQueueCreate(10, sizeof(SensorData));
 
-  // Jalankan task untuk kirim data di core 1
   xTaskCreatePinnedToCore(
-    sendDataTask,
-    "SendDataTask",
-    4096,
-    NULL,
-    1,
-    NULL,
-    1  // Core 1
+    sendDataTask, "SendDataTask", 4096, NULL, 1, NULL, 1
   );
 }
 
@@ -85,7 +82,6 @@ void loop() {
   updateDisplay();
   updateTimer();
 
-  // Kirim data ke queue setiap 10 detik
   static unsigned long lastSendTime = 0;
   if (millis() - lastSendTime > 10000) {
     lastSendTime = millis();
@@ -96,13 +92,16 @@ void loop() {
   delay(100);
 }
 
-// TASK: Kirim data ke Google Sheets & ThingSpeak (core 1)
 void sendDataTask(void *parameter) {
   SensorData data;
   while (true) {
     if (xQueueReceive(dataQueue, &data, portMAX_DELAY)) {
-      sendToGoogleSheets(data.o2, data.flow, data.usageTime);
-      sendToThingSpeak(data.o2, data.flow);
+      if (WiFi.status() == WL_CONNECTED) {
+        sendToGoogleSheets(data.o2, data.flow, data.usageTime);
+        sendToThingSpeak(data.o2, data.flow);
+      } else {
+        Serial.println("Offline mode: Data not sent");
+      }
     }
   }
 }
@@ -117,10 +116,10 @@ void readSensor() {
         oxydouble = o2c / 10.0;
         flowdouble = o2f / 10.0;
       } else {
-        Serial2.read(); // Buang 1 byte jika tidak valid
+        Serial2.read();
       }
     } else {
-      Serial2.read(); // Buang byte hingga header ditemukan
+      Serial2.read();
     }
   }
   objectDetected = digitalRead(PROXIMITY_PIN) == LOW;
@@ -143,47 +142,36 @@ unsigned long getTotalSeconds() {
 }
 
 void updateDisplay() {
-  unsigned long totalSeconds = getTotalSeconds();
-  unsigned int hours = totalSeconds / 3600;
-  unsigned int minutes = (totalSeconds % 3600) / 60;
-  unsigned int seconds = totalSeconds % 60;
-
+  unsigned long t = getTotalSeconds();
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.printf("O2: %.1f%%\nFlow: %.1f LPM\nObject: %s\nTime: %02d:%02d:%02d\n",
-                 oxydouble, flowdouble, objectDetected ? "Detected" : "Not", hours, minutes, seconds);
+  display.printf("O2: %.1f%%\nFlow: %.1f LPM\nObject: %s\nTime: %02lu:%02lu:%02lu\n",
+                 oxydouble, flowdouble,
+                 objectDetected ? "Detected" : "Not Detected",
+                 t / 3600, (t % 3600) / 60, t % 60);
   display.display();
 }
 
 void sendToGoogleSheets(double oxygen, double flow, unsigned long timeUsed) {
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    http.begin(googleScriptURL);
-    http.addHeader("Content-Type", "application/json");
-
-    String jsonPayload = "{\"o2\":" + String(oxygen) + ",\"flow\":" + String(flow) + ",\"usageTime\":" + String(timeUsed) + "}";
-    int httpResponseCode = http.POST(jsonPayload);
-    Serial.printf("Google Sheets response: %d\n", httpResponseCode);
-    http.end();
-  } else {
-    Serial.println("WiFi not connected (Google Sheets)");
-  }
+  HTTPClient http;
+  http.begin(googleScriptURL);
+  http.addHeader("Content-Type", "application/json");
+  String payload = "{\"o2\":" + String(oxygen) +
+                   ",\"flow\":" + String(flow) +
+                   ",\"usageTime\":" + String(timeUsed) + "}";
+  int response = http.POST(payload);
+  Serial.printf("Google Sheets response: %d\n", response);
+  http.end();
 }
 
 void sendToThingSpeak(double oxygen, double flow) {
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    http.begin(thingspeakURL);
-    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-
-    String postData = "api_key=" + String(thingspeakAPIKey) +
-                      "&field1=" + String(oxygen) +
-                      "&field2=" + String(flow);
-
-    int httpResponseCode = http.POST(postData);
-    Serial.printf("ThingSpeak response: %d\n", httpResponseCode);
-    http.end();
-  } else {
-    Serial.println("WiFi not connected (ThingSpeak)");
-  }
+  HTTPClient http;
+  http.begin(thingspeakURL);
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  String postData = "api_key=" + String(thingspeakAPIKey) +
+                    "&field1=" + String(oxygen) +
+                    "&field2=" + String(flow);
+  int response = http.POST(postData);
+  Serial.printf("ThingSpeak response: %d\n", response);
+  http.end();
 }
